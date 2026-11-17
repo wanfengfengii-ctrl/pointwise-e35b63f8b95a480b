@@ -2,12 +2,16 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from results.database import Database, database_session, current_database
+from results.database import Database, database_session, current_database, ResultNotFound
 from cohorts.repository import CohortRepository
 from batch_analysis.selection import fit_frozen_cohort
+from batch_analysis.support import solve_support, validate_drop
 from predictions.joint import predict_joint_levels
+from predictions.ranges import compute_support_ranges
 from results.fit_codec import encode_fit, decode_fit, FitPayloadError
 from results.prediction_codec import encode_prediction
+from results.support_codec import encode_support, decode_support
+from results.support_prediction_codec import encode_support_prediction
 from application.measurements import apply_measurements
 from application.cohorts import freeze_cohort
 from application.results import read_result
@@ -32,6 +36,66 @@ def predict_batches(fit_id, requests):
         raise FitPayloadError('frozen fit binding mismatch')
     prediction = predict_joint_levels(fit, requests)
     identity = database.publish_prediction(fit_id, encode_prediction(fit_id, prediction))
+    return read_result(identity)
+
+
+def _require_published_fit(fit_id):
+    database = current_database()
+    fit_rows = database.query(
+        'SELECT kind FROM result_heads WHERE result_id=?', (fit_id,))
+    if fit_rows:
+        if fit_rows[0][0] != 'fit':
+            raise ValueError('support requires a published fit_id')
+        return database, database.read_published(fit_id)
+    other_support = database.query(
+        'SELECT 1 FROM support_heads WHERE support_id=?', (fit_id,))
+    other_range = database.query(
+        'SELECT 1 FROM support_prediction_heads WHERE prediction_id=?', (fit_id,))
+    if other_support or other_range:
+        raise ValueError('support requires a published fit_id')
+    raise ResultNotFound(fit_id)
+
+
+def support_batch(fit_id, drop):
+    budget = validate_drop(drop)
+    database, stored = _require_published_fit(fit_id)
+    decoded = decode_fit(stored['payload'])
+    fit = decoded.state
+    if fit.problem.cohort.cohort_id != stored['cohort_id']:
+        raise FitPayloadError('frozen fit binding mismatch')
+    support = solve_support(fit.problem, budget)
+    payload = encode_support(stored['cohort_id'], fit_id, support, decoded.provenance)
+    identity = database.publish_support(fit_id, payload)
+    return read_result(identity)
+
+
+def predict_support(support_id, requests):
+    database = current_database()
+    support_rows = database.query(
+        'SELECT 1 FROM support_heads WHERE support_id=?', (support_id,))
+    if not support_rows:
+        legacy = database.query(
+            'SELECT kind FROM result_heads WHERE result_id=?', (support_id,))
+        other_range = database.query(
+            'SELECT 1 FROM support_prediction_heads WHERE prediction_id=?', (support_id,))
+        if legacy or other_range:
+            raise ValueError('support prediction requires a published support_id')
+        raise ResultNotFound(support_id)
+    stored = database.read_support(support_id)
+    fit_stored = database.read_published(stored['fit_id'])
+    if fit_stored['kind'] != 'fit':
+        raise ValueError('support parent must be a published fit')
+    fit_decoded = decode_fit(fit_stored['payload'])
+    fit = fit_decoded.state
+    support_decoded, payload_fit_id = decode_support(stored['payload'])
+    if payload_fit_id != stored['fit_id'] or support_decoded.cohort_id != stored['cohort_id']:
+        raise ValueError('frozen support binding mismatch')
+    if fit.problem.cohort.cohort_id != support_decoded.cohort_id:
+        raise ValueError('support and fit cohort bindings disagree')
+    prediction = compute_support_ranges(
+        fit, stored['fit_id'], support_id, support_decoded.support.components, requests)
+    payload = encode_support_prediction(support_id, stored['fit_id'], prediction)
+    identity = database.publish_support_prediction(support_id, stored['fit_id'], payload)
     return read_result(identity)
 
 
@@ -95,6 +159,12 @@ def main(argv=None):
     predict = commands.add_parser('predict')
     predict.add_argument('fit_id')
     predict.add_argument('input')
+    support = commands.add_parser('support')
+    support.add_argument('fit_id')
+    support.add_argument('drop')
+    support_predict = commands.add_parser('support-predict')
+    support_predict.add_argument('support_id')
+    support_predict.add_argument('input')
     read = commands.add_parser('read')
     read.add_argument('result_id')
     arguments = parser.parse_args(argv)
@@ -105,7 +175,8 @@ def main(argv=None):
             database = Database(arguments.db)
             try:
                 with database_session(database):
-                    if arguments.command in ('apply', 'freeze', 'predict'):
+                    if arguments.command in ('apply', 'freeze', 'predict',
+                                             'support-predict'):
                         data = json.loads(Path(arguments.input).read_text(encoding='utf-8'))
                     if arguments.command == 'apply':
                         result = apply_measurements(data)
@@ -115,6 +186,10 @@ def main(argv=None):
                         result = fit_batch(arguments.cohort_id)
                     elif arguments.command == 'predict':
                         result = predict_batches(arguments.fit_id, data)
+                    elif arguments.command == 'support':
+                        result = support_batch(arguments.fit_id, arguments.drop)
+                    elif arguments.command == 'support-predict':
+                        result = predict_support(arguments.support_id, data)
                     else:
                         result = read_result(arguments.result_id)
             finally:

@@ -57,8 +57,8 @@ class Database:
         return self.execute(sql, parameters).fetchall()
 
     def fail_next_publication(self, kind):
-        if kind not in ('fit', 'prediction'):
-            raise ValueError('failure kind must be fit or prediction')
+        if kind not in ('fit', 'prediction', 'support', 'support_prediction'):
+            raise ValueError('unknown publication failure kind')
         self.failure_kind = kind
 
     def _publish(self, kind, parent_id, payload):
@@ -88,6 +88,66 @@ class Database:
 
     def publish_prediction(self, fit_id, payload):
         return self._publish('prediction', fit_id, payload)
+
+    def publish_support(self, fit_id, payload):
+        identity = 'support-' + uuid4().hex
+        with self.transaction():
+            parent = self.query(
+                'SELECT kind,cohort_id FROM result_heads WHERE result_id=?', (fit_id,))
+            if not parent or parent[0][0] != 'fit':
+                raise StorageError('support parent must be a published fit')
+            if not self.query('SELECT 1 FROM result_payloads WHERE result_id=?', (fit_id,)):
+                raise StorageError('incomplete parent fit')
+            cohort_id = parent[0][1]
+            self.execute('INSERT INTO support_heads VALUES(?,?,?)',
+                         (identity, fit_id, cohort_id))
+            if self.failure_kind == 'support':
+                self.failure_kind = None
+                self.execute('INSERT INTO publication_guard VALUES(1)')
+            self.execute('INSERT INTO support_payloads VALUES(?,?)', (identity, payload))
+        return identity
+
+    def publish_support_prediction(self, support_id, fit_id, payload):
+        identity = 'support-prediction-' + uuid4().hex
+        with self.transaction():
+            parents = self.query(
+                'SELECT 1 FROM support_heads WHERE support_id=? AND fit_id=?',
+                (support_id, fit_id))
+            if parents != [(1,)]:
+                raise StorageError('support prediction parent must be a published support')
+            if not self.query('SELECT 1 FROM support_payloads WHERE support_id=?',
+                              (support_id,)):
+                raise StorageError('incomplete parent support')
+            self.execute('INSERT INTO support_prediction_heads VALUES(?,?,?)',
+                         (identity, support_id, fit_id))
+            if self.failure_kind == 'support_prediction':
+                self.failure_kind = None
+                self.execute('INSERT INTO publication_guard VALUES(1)')
+            self.execute(
+                'INSERT INTO support_prediction_payloads VALUES(?,?)', (identity, payload))
+        return identity
+
+    def read_support(self, identity):
+        rows = self.query(
+            'SELECT h.fit_id,h.cohort_id,p.payload FROM support_heads h '
+            'JOIN support_payloads p ON h.support_id=p.support_id WHERE h.support_id=?',
+            (identity,))
+        if not rows:
+            raise ResultNotFound(identity)
+        fit_id, cohort_id, payload = rows[0]
+        return {'result_id': identity, 'kind': 'support', 'fit_id': fit_id,
+                'cohort_id': cohort_id, 'payload': payload}
+
+    def read_support_prediction(self, identity):
+        rows = self.query(
+            'SELECT h.support_id,h.fit_id,p.payload FROM support_prediction_heads h '
+            'JOIN support_prediction_payloads p ON h.prediction_id=p.prediction_id '
+            'WHERE h.prediction_id=?', (identity,))
+        if not rows:
+            raise ResultNotFound(identity)
+        support_id, fit_id, payload = rows[0]
+        return {'result_id': identity, 'kind': 'support_prediction',
+                'support_id': support_id, 'fit_id': fit_id, 'payload': payload}
 
     def read_published(self, identity):
         rows = self.query(

@@ -21,6 +21,18 @@ SCHEMA_STATEMENTS = (
     '(kind="prediction" AND fit_id IS NOT NULL AND cohort_id IS NULL)))',
     'CREATE TABLE IF NOT EXISTS result_payloads('
     'result_id TEXT PRIMARY KEY REFERENCES result_heads(result_id),payload TEXT NOT NULL)',
+    'CREATE TABLE IF NOT EXISTS support_heads('
+    'support_id TEXT PRIMARY KEY,fit_id TEXT NOT NULL REFERENCES result_heads(result_id),'
+    'cohort_id TEXT NOT NULL REFERENCES cohorts(cohort_id))',
+    'CREATE TABLE IF NOT EXISTS support_payloads('
+    'support_id TEXT PRIMARY KEY REFERENCES support_heads(support_id),payload TEXT NOT NULL)',
+    'CREATE TABLE IF NOT EXISTS support_prediction_heads('
+    'prediction_id TEXT PRIMARY KEY,'
+    'support_id TEXT NOT NULL REFERENCES support_heads(support_id),'
+    'fit_id TEXT NOT NULL REFERENCES result_heads(result_id))',
+    'CREATE TABLE IF NOT EXISTS support_prediction_payloads('
+    'prediction_id TEXT PRIMARY KEY '
+    'REFERENCES support_prediction_heads(prediction_id),payload TEXT NOT NULL)',
     'CREATE TABLE IF NOT EXISTS publication_guard(value INTEGER CHECK(value=0))',
 )
 

@@ -61,3 +61,9 @@ CLI同样提供apply INPUT.json、freeze IDS.json、fit COHORT_ID、predict FIT_
 存储提交失败夹具为db.fail_next_publication("fit")或("prediction")：下一次相应发布写入成果头后，会触发SQLite CHECK约束失败。整个业务事务回滚，夹具一次性消费，允许稳定重试。它不替换统计函数，也不返回常量成果。请在专用测试数据库使用。
 
 全部原回归保存在六个tests/test_*.py。数值核账包含平衡手算、零方差、精确有理潜在高斯精度逆矩阵、独立70位Decimal Gauss-Jordan限制似然，以及多驻点的独立得分二分。数据库测试覆盖冲突、撤回恢复、冻结来源、失败发布、初始化、返回对象隔离及磁盘重开。运行环境需允许测试创建自己的临时目录。
+
+## 批次方差支持区域扩展（V2）
+
+`application.analysis`另提供`support_batch(fit_id, drop)`与`predict_support(support_id, requests)`，业务口径见SUPPORT.md，实现交接与不变量见SUPPORT_HANDOFF.md。前者基于完整冻结队列求S={τ≥0:ell_R(τ)≥全局最大值−drop}的全部闭连通分量（保留真实空隙、零下降保留全部最大点、拒绝外包区间）；后者在同一S上对至多8项请求报告逐项均值与完整协方差的最小/最大值，覆盖经Sturm枚举认证的内部极值，不把逐项极值拼成联合分布。数值正确性无法保证时抛原`NumericalError`且不发布。两类新成果独立持久化，支持`db.fail_next_publication("support")`与`("support_prediction")`的一次性失败夹具；读取仍统一走`read_result`且不重算。CLI新增`support FIT_ID DROP`与`support-predict SUPPORT_ID REQUESTS.json`。
+
+新增核验：`python3.11 -B support_checks.py verify`（原回归+有限参照+V2联合核验）、`python3.11 -B support_examples.py`（两段支持、内部极值、重复身份、更正重开演示）、`python3.11 -B support_audit.py`（独立业务核账）。

@@ -2,15 +2,27 @@
   "python": "3.11",
   "cwd": "project root",
   "setup": [],
-  "verify": ["python3.11","-B","-m","unittest","discover","-s","tests","-v"],
-  "demo": ["python3.11","-B","-m","application.analysis","--db","demo-day.sqlite","demo","--sample","sample_day.json"],
+  "verify": ["python3.11", "-B", "-m", "unittest", "discover", "-s", "tests", "-v"],
+  "demo": ["python3.11", "-B", "-m", "application.analysis", "--db", "demo-day.sqlite", "demo", "--sample", "sample_day.json"],
+  "support_verify": ["python3.11", "-B", "support_checks.py", "verify"],
+  "support_reference": ["python3.11", "-B", "support_checks.py", "reference"],
+  "support_demo": ["python3.11", "-B", "support_examples.py"],
+  "support_audit": ["python3.11", "-B", "support_audit.py"],
   "normal_checks": [
-    ["python3.11","-B","-m","unittest","discover","-s","tests","-v"],
-    ["python3.11","-B","-m","unittest","tests.test_measurements.TestMeasurements.test_units_and_revision","tests.test_predictions.TestPredictions.test_shared_new_identity","tests.test_publication.TestPublication.test_fit_failure_retry","tests.test_workflow.TestWorkflow.test_correct_reopen_read"],
-    ["python3.11","-B","-m","unittest","tests.test_measurements.TestMeasurements.test_conflict_atomicity","tests.test_predictions.TestPredictions.test_existing_conditioning_and_conflict"],
-    ["python3.11","-B","-m","unittest","tests.test_cohorts.TestCohorts.test_withdrawn_and_frozen"],
-    ["python3.11","-B","-m","unittest","tests.test_batch_fit.TestBatchFit.test_balanced_and_zero_boundary","tests.test_batch_fit.TestBatchFit.test_global_candidates","tests.test_batch_fit.TestBatchFit.test_limits_repeated_roots_and_ties"]
+    ["python3.11", "-B", "-m", "unittest", "discover", "-s", "tests", "-v"],
+    ["python3.11", "-B", "-m", "unittest", "tests.test_measurements.TestMeasurements.test_units_and_revision", "tests.test_predictions.TestPredictions.test_shared_new_identity", "tests.test_publication.TestPublication.test_fit_failure_retry", "tests.test_workflow.TestWorkflow.test_correct_reopen_read"],
+    ["python3.11", "-B", "-m", "unittest", "tests.test_measurements.TestMeasurements.test_conflict_atomicity", "tests.test_predictions.TestPredictions.test_existing_conditioning_and_conflict"],
+    ["python3.11", "-B", "-m", "unittest", "tests.test_cohorts.TestCohorts.test_withdrawn_and_frozen"],
+    ["python3.11", "-B", "-m", "unittest", "tests.test_batch_fit.TestBatchFit.test_balanced_and_zero_boundary", "tests.test_batch_fit.TestBatchFit.test_global_candidates", "tests.test_batch_fit.TestBatchFit.test_limits_repeated_roots_and_ties"]
   ],
   "demo_precondition": "demo-day.sqlite must not exist; an existing user database is never reset",
-  "expected": {"tau":8.5,"mean":4.5,"repeated_new_covariance":11.5,"distinct_new_covariance":3,"old_results_unchanged_after_reopen":true}
+  "expected": {"tau": 8.5, "mean": 4.5, "repeated_new_covariance": 11.5, "distinct_new_covariance": 3, "old_results_unchanged_after_reopen": true},
+  "support_expected": {
+    "drop": 0.08,
+    "component_count": 2,
+    "components": [[0.25003895168768846, 3.1138075525644451], [4.2132069678019726, 5.7106684402659102]],
+    "A_mean_range": [-8.229436493964886, -7.87398834883343],
+    "A_mean_maximum_tau": 5.021832529627914,
+    "gap_tau": 3.5556579892030454
+  }
 }
