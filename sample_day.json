@@ -1,0 +1,8 @@
+[
+  {"measurement_id":"M1","revision":1,"batch_id":"A","value":1,"variance":1,"unit":"mg/L"},
+  {"measurement_id":"M2","revision":1,"batch_id":"A","value":2,"variance":1,"unit":"mg/L"},
+  {"measurement_id":"M3","revision":1,"batch_id":"B","value":4,"variance":1,"unit":"mg/L"},
+  {"measurement_id":"M4","revision":1,"batch_id":"B","value":5,"variance":1,"unit":"mg/L"},
+  {"measurement_id":"M5","revision":1,"batch_id":"C","value":7,"variance":1,"unit":"mg/L"},
+  {"measurement_id":"M6","revision":1,"batch_id":"C","value":8,"variance":1,"unit":"mg/L"}
+]
